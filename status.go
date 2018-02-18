@@ -15,7 +15,7 @@ type Status struct {
 	blockUnsupport bool  // 服务端是否支持断点续传, alignment
 
 	Downloaded int64     `json:"downloaded"` // 已下载的数据量
-	BlockList  blockList `json:"block_list"`
+	BlockList  BlockList `json:"block_list"` // 下载区块列表
 
 	Speeds      int64         `json:"-"` // 下载速度, 每秒
 	MaxSpeeds   int64         `json:"-"` // 最大下载速度

@@ -24,7 +24,8 @@ type Block struct {
 	waitingToWrite bool   // 是否正在等待写入磁盘
 }
 
-type blockList []*Block
+// BlockList 下载区块列表
+type BlockList []*Block
 
 // isDone 判断线程是否完成下载任务
 func (b *Block) isDone() bool {
@@ -76,7 +77,7 @@ func (b *Block) expectedContentLength() int64 {
 // avaliableThread 筛选空闲的线程,
 // 返回值, 没有空闲的线程, bool 返回 false,
 // 找到空闲的线程, int 返回该线程的索引 index
-func (bl *blockList) avaliableThread() (int, bool) {
+func (bl *BlockList) avaliableThread() (int, bool) {
 	index := -1
 	for k := range *bl {
 		if (*bl)[k].isComplete() {
@@ -88,7 +89,7 @@ func (bl *blockList) avaliableThread() (int, bool) {
 }
 
 // isAllDone 检查所有的线程, 是否都完成了下载任务
-func (bl *blockList) isAllDone() bool {
+func (bl *BlockList) isAllDone() bool {
 	for k := range *bl {
 		if (*bl)[k].isDone() {
 			continue

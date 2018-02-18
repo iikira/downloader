@@ -147,7 +147,7 @@ func (der *Downloader) Execute() (err error) {
 
 			var begin int64
 			// 数据平均分配给各个线程
-			der.status.BlockList = make(blockList, der.config.Parallel)
+			der.status.BlockList = make(BlockList, der.config.Parallel)
 			for i := 0; i < der.config.Parallel; i++ {
 				var end = (int64(i) + 1) * blockSize
 				der.status.BlockList[i] = &Block{
