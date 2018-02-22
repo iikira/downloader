@@ -25,7 +25,8 @@ func main() {
 
 	for k := range flag.Args() {
 		downloader.DoDownload(flag.Arg(k), &downloader.Config{
-			Parallel: 500,
+			Parallel: parallel,
+			Testing:  testing,
 		})
 	}
 	fmt.Println()
