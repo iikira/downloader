@@ -3,6 +3,7 @@ package downloader
 import (
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -12,6 +13,7 @@ var (
 
 // blockMonitor 延迟监控各线程状态,
 // 重设长时间无响应, 和下载速度为 0 的线程
+// 动态分配新线程
 func (der *Downloader) blockMonitor() <-chan struct{} {
 	c := make(chan struct{})
 	go func() {
@@ -31,39 +33,67 @@ func (der *Downloader) blockMonitor() <-chan struct{} {
 				der.recordBreakPoint()
 			}
 
-			// 速度减慢, 开启监控
-			if der.status.Speeds < der.status.MaxSpeeds/10 {
-				der.status.MaxSpeeds = 0
+			// 统计各线程的速度
+			go func() {
 				for k := range der.status.BlockList {
 					go func(k int) {
-						// 过滤已完成下载任务的线程
-						if der.status.BlockList[k].isDone() {
+						old := atomic.LoadInt64(&der.status.BlockList[k].Begin)
+						time.Sleep(1 * time.Second)
+						atomic.StoreInt64(&der.status.BlockList[k].speed, old)
+					}(k)
+				}
+			}()
+
+			// 速度减慢, 开启监控
+			if atomic.LoadInt64(&der.status.Speeds) < atomic.LoadInt64(&der.status.MaxSpeeds)/10 {
+				atomic.StoreInt64(&der.status.MaxSpeeds, 0)
+				for k := range der.status.BlockList {
+					go func(k int) {
+						// 重设长时间无响应, 和下载速度为 0 的线程
+						// 过滤速度有变化的线程, 不过滤正在等待写入磁盘的线程
+						if der.status.BlockList[k].waitingToWrite || atomic.LoadInt64(&der.status.BlockList[k].speed) == 0 {
 							return
 						}
 
-						// 重设长时间无响应, 和下载速度为 0 的线程
-						go func(k int) {
+						// 重设连接
+						if r := der.status.BlockList[k].resp; r != nil {
+							r.Body.Close()
+						}
 
-							if der.status.Speeds != 0 {
-								// 设 old 速度监测点, 2 秒后检查速度有无变化
-								old := der.status.BlockList[k].Begin
-								time.Sleep(2 * time.Second)
-								// 过滤 速度有变化, 或 2 秒内完成了下载任务 的线程, 不过滤正在等待写入磁盘的线程
-								if der.status.BlockList[k].waitingToWrite || old != der.status.BlockList[k].Begin || der.status.BlockList[k].isDone() {
-									return
-								}
-							}
+					}(k)
 
-							mu.Lock() // 加锁, 防止出现重复添加线程的状况 (实验阶段)
+					// 动态分配新线程
+					go func(k int) {
+						mu.Lock()
 
-							// 重设连接
-							if r := der.status.BlockList[k].resp; r != nil {
-								r.Body.Close()
-							}
-
+						// 筛选空闲的线程
+						index, ok := der.status.BlockList.avaliableThread()
+						if !ok { // 没有空的
 							mu.Unlock() // 解锁
-						}(k)
+							return
+						}
 
+						end := atomic.LoadInt64(&der.status.BlockList[k].End)
+						middle := (atomic.LoadInt64(&der.status.BlockList[k].Begin) + end) / 2
+
+						if end-middle <= 128*1024 { // 如果线程剩余的下载量太少, 不分配空闲线程
+							mu.Unlock()
+							return
+						}
+
+						// 折半
+						atomic.StoreInt64(&der.status.BlockList[index].Begin, middle+1)
+						atomic.StoreInt64(&der.status.BlockList[index].End, end)
+
+						der.status.BlockList[index].IsFinal = der.status.BlockList[k].IsFinal
+						atomic.StoreInt64(&der.status.BlockList[k].End, middle)
+
+						// End 已变, 取消 Final
+						der.status.BlockList[k].IsFinal = false
+
+						mu.Unlock()
+
+						der.addExecBlock(index)
 					}(k)
 				}
 			}
