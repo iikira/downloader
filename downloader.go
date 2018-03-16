@@ -15,7 +15,7 @@ type Downloader struct {
 	OnResume  func()
 
 	URL    string
-	Config *Config
+	Config Config
 
 	sinceTime time.Time
 	status    Status
@@ -23,7 +23,7 @@ type Downloader struct {
 }
 
 // NewDownloader 创建新的文件下载
-func NewDownloader(durl string, cfg *Config) (der *Downloader, err error) {
+func NewDownloader(durl string, cfg Config) (der *Downloader, err error) {
 	der = &Downloader{
 		URL:    durl,
 		Config: cfg,

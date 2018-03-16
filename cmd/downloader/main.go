@@ -29,7 +29,7 @@ func main() {
 	client := requester.NewHTTPClient()
 	client.UserAgent = ua
 	for k := range flag.Args() {
-		downloader.DoDownload(flag.Arg(k), &downloader.Config{
+		downloader.DoDownload(flag.Arg(k), downloader.Config{
 			Client:   client,
 			Parallel: parallel,
 			Testing:  testing,

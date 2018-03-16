@@ -90,7 +90,7 @@ func (der *Downloader) blockMonitor() <-chan struct{} {
 						end := atomic.LoadInt64(&der.status.BlockList[k].End)
 						middle := (atomic.LoadInt64(&der.status.BlockList[k].Begin) + end) / 2
 
-						if end-middle <= 128*1024 { // 如果线程剩余的下载量太少, 不分配空闲线程
+						if end-middle <= MinParallelSize { // 如果线程剩余的下载量太少, 不分配空闲线程
 							mu.Unlock()
 							return
 						}
