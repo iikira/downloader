@@ -16,15 +16,15 @@ var (
 
 // Block 下载区块
 type Block struct {
-	Begin   int64 `json:"begin"`
-	End     int64 `json:"end"`
-	speed   int64 // 速度
-	IsFinal bool  `json:"isfinal"` // 最后线程, 因为最后的下载线程, 需要另外做处理
+	Begin      int64 `json:"begin"`
+	End        int64 `json:"end"`
+	speed      int64 // 速度
+	speedsStat SpeedsStat
+	IsFinal    bool `json:"isfinal"` // 最后线程, 因为最后的下载线程, 需要另外做处理
 
-	buf            []byte // 缓冲
-	resp           *http.Response
-	running        int  // 线程的载入量
-	waitingToWrite bool // 是否正在等待写入磁盘
+	buf     []byte // 缓冲
+	resp    *http.Response
+	running int // 线程的载入量
 }
 
 // BlockList 下载区块列表
@@ -116,7 +116,7 @@ for_2: // code 为 1 时, 不重试
 		code, err := der.execBlock(id)
 
 		// 下载成功, 或者下载暂停, 退出循环
-		if code == 0 || err == nil || der.paused {
+		if code == 0 || err == nil || der.status.paused {
 			break
 		}
 
@@ -151,7 +151,7 @@ func (der *Downloader) execBlock(id int) (code int, err error) {
 
 	// 设置 Range 请求头, 给各线程分配内容
 	// 开始 http 请求
-	resp, err := der.config.Client.Req("GET", der.url, nil, map[string]string{
+	resp, err := der.Config.Client.Req("GET", der.URL, nil, map[string]string{
 		"Range": fmt.Sprintf("bytes=%d-%d", atomic.LoadInt64(&block.Begin), atomic.LoadInt64(&block.End)),
 	})
 	if err != nil {
@@ -178,7 +178,7 @@ func (der *Downloader) execBlock(id int) (code int, err error) {
 		// 暂时不知道出错的原因......
 		return 2, errors.New(resp.Status)
 	case 429, 509: // Too Many Requests
-		for der.status.Speeds >= der.status.MaxSpeeds/5 {
+		for der.status.Speeds >= der.status.maxSpeeds/5 {
 			// 下载速度若不减慢, 循环就不会退出
 			time.Sleep(1 * time.Second)
 		}
@@ -201,7 +201,8 @@ func (der *Downloader) execBlock(id int) (code int, err error) {
 		n, err = resp.Body.Read(block.buf)
 
 		n64 = int64(n)
-		atomic.AddInt64(&der.status.Speeds, n64)
+		der.status.speedsStat.AddReaded(n64)
+		block.speedsStat.AddReaded(n64)
 
 		// 获得剩余的数据量
 		expectedSize := block.expectedContentLength()
@@ -219,16 +220,14 @@ func (der *Downloader) execBlock(id int) (code int, err error) {
 			err = io.EOF
 		}
 
-		if !der.config.Testing {
+		if !der.Config.Testing {
 			// 加锁, 减轻硬盘的压力
-			block.waitingToWrite = true
 			writeMu.Lock()
 
 			// 写入数据
-			der.file.WriteAt(block.buf[:n], begin)
+			der.status.file.WriteAt(block.buf[:n], begin)
 
 			writeMu.Unlock()
-			block.waitingToWrite = false
 		}
 
 		// 两次 begin 不相等, 可能已有新的空闲线程参与
