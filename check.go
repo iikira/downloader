@@ -40,7 +40,7 @@ func (der *Downloader) Check() (err error) {
 		return fmt.Errorf(resp.Status)
 	}
 
-	der.status.TotalSize = resp.ContentLength
+	der.status.StatusStat.TotalSize = resp.ContentLength
 
 	// 判断服务端是否支持断点续传
 	if resp.ContentLength <= 0 {
