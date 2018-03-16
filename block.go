@@ -109,38 +109,36 @@ func (bl *BlockList) isAllDone() bool {
 
 // addExecBlock 增加线程任务
 func (der *Downloader) addExecBlock(id int) {
-	go func(id int) {
-		der.status.BlockList[id].running++
-	for_2: // code 为 1 时, 不重试
-		// 其他的 code, 无限重试
-		for {
-			code, err := der.execBlock(id)
+	der.status.BlockList[id].running++
+for_2: // code 为 1 时, 不重试
+	// 其他的 code, 无限重试
+	for {
+		code, err := der.execBlock(id)
 
-			// 下载成功, 或者下载暂停, 退出循环
-			if code == 0 || err == nil || der.paused {
-				break
-			}
-
-			// fmt.Println(id, code, err)
-
-			// 未成功(有错误), 继续
-			switch code {
-			case 1: // 不重试
-				break for_2
-			case 2: // 休息 3 秒, 再无限重试
-				time.Sleep(3 * time.Second)
-			case 61: // 不休息无限重试
-				continue
-			default:
-				time.Sleep(3 * time.Second)
-			}
-
-			// 重新下载
-			continue
+		// 下载成功, 或者下载暂停, 退出循环
+		if code == 0 || err == nil || der.paused {
+			break
 		}
 
-		der.status.BlockList[id].running--
-	}(id)
+		// fmt.Println(id, code, err)
+
+		// 未成功(有错误), 继续
+		switch code {
+		case 1: // 不重试
+			break for_2
+		case 2: // 休息 3 秒, 再无限重试
+			time.Sleep(3 * time.Second)
+		case 61: // 不休息无限重试
+			continue
+		default:
+			time.Sleep(3 * time.Second)
+		}
+
+		// 重新下载
+		continue
+	}
+
+	der.status.BlockList[id].running--
 }
 
 // downloadBlock 块执行下载任务

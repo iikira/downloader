@@ -99,7 +99,7 @@ func (der *Downloader) blockMonitor() <-chan struct{} {
 
 						mu.Unlock()
 
-						der.addExecBlock(index)
+						go der.addExecBlock(index)
 					}(k)
 				}
 			}
