@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"github.com/iikira/BaiduPCS-Go/requester"
 	"github.com/iikira/downloader"
+	"os"
+	"runtime"
 )
 
 var (
@@ -23,6 +26,10 @@ func init() {
 func main() {
 	if flag.NArg() == 0 {
 		flag.Usage()
+		if runtime.GOOS == "windows" {
+			bufio.NewReader(os.Stdin).ReadByte()
+		}
+
 		return
 	}
 
