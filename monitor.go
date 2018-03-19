@@ -34,7 +34,7 @@ func (der *Downloader) blockMonitor() <-chan struct{} {
 			}
 
 			// 获取下载速度
-			speeds := der.status.StatusStat.speedsStat.EndAndGetSpeedsPerSecond()
+			speeds := der.status.StatusStat.speedsStat.GetSpeedsPerSecond()
 			atomic.StoreInt64(&der.status.StatusStat.Speeds, speeds)
 			if speeds > atomic.LoadInt64(&der.status.StatusStat.maxSpeeds) {
 				atomic.StoreInt64(&der.status.StatusStat.maxSpeeds, speeds)
@@ -46,7 +46,7 @@ func (der *Downloader) blockMonitor() <-chan struct{} {
 					go func(k int) {
 						block := der.status.BlockList[k]
 						time.Sleep(1 * time.Second)
-						atomic.StoreInt64(&block.speed, block.speedsStat.EndAndGetSpeedsPerSecond())
+						atomic.StoreInt64(&block.speed, block.speedsStat.GetSpeedsPerSecond())
 					}(k)
 				}
 			}()
@@ -65,6 +65,7 @@ func (der *Downloader) blockMonitor() <-chan struct{} {
 						// 重设连接
 						if r := der.status.BlockList[k].resp; r != nil {
 							r.Body.Close()
+							verbosef("MONITER: thread reload, thread id: %d\n", k)
 						}
 
 					}(k)
@@ -100,6 +101,7 @@ func (der *Downloader) blockMonitor() <-chan struct{} {
 
 						der.monitorMu.Unlock()
 
+						verbosef("MONITER: thread copied: %d -> %d\n", k, index)
 						go der.addExecBlock(index)
 					}(k)
 				}

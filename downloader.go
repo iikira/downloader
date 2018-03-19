@@ -70,6 +70,8 @@ func (der *Downloader) Execute() (err error) {
 				der.Config.CacheSize = int(blockSize)
 			}
 
+			verbosef("CREATED: parallel: %d, cache size: %d\n", der.Config.Parallel, der.Config.CacheSize)
+
 			var begin int64
 			// 数据平均分配给各个线程
 			der.status.BlockList = make(BlockList, der.Config.Parallel)

@@ -32,3 +32,9 @@ func triggerOnError(f func(code int, err error), code int, err error) {
 
 	go f(code, err)
 }
+
+func verbosef(format string, a ...interface{}) {
+	if Verbose {
+		fmt.Printf(format, a...)
+	}
+}

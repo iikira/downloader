@@ -10,7 +10,7 @@ import (
 
 // SpeedsStat 统计下载速度
 type SpeedsStat struct {
-	Readed      int64
+	readed      int64
 	timeElapsed time.Duration
 	nowTime     time.Time
 	once        sync.Once
@@ -25,20 +25,20 @@ func (sps *SpeedsStat) AddReaded(readed int64) {
 		}
 	})
 
-	atomic.AddInt64(&sps.Readed, readed)
+	atomic.AddInt64(&sps.readed, readed)
 }
 
-// EndAndGetSpeedsPerSecond 结束统计速度, 并返回每秒的速度
-func (sps *SpeedsStat) EndAndGetSpeedsPerSecond() (speeds int64) {
+// GetSpeedsPerSecond 结束统计速度, 并返回每秒的速度
+func (sps *SpeedsStat) GetSpeedsPerSecond() (speeds int64) {
 	int64Ptr := (*int64)(unsafe.Pointer(&sps.timeElapsed))
 	atomic.StoreInt64(int64Ptr, (int64)(time.Since(sps.nowTime)))
 	if atomic.LoadInt64(int64Ptr) == 0 {
 		return 0
 	}
 
-	speeds = int64(float64(atomic.LoadInt64(&sps.Readed)) / sps.timeElapsed.Seconds())
+	speeds = int64(float64(atomic.LoadInt64(&sps.readed)) / sps.timeElapsed.Seconds())
 
-	atomic.StoreInt64(&sps.Readed, 0)
+	atomic.StoreInt64(&sps.readed, 0)
 	sps.nowTime = time.Now()
 	return
 }

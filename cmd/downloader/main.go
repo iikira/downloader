@@ -11,14 +11,16 @@ import (
 )
 
 var (
-	parallel int
-	testing  bool
-	ua       string
+	parallel  int
+	cacheSize int
+	testing   bool
+	ua        string
 )
 
 func init() {
 	flag.IntVar(&parallel, "p", 5, "download max parallel")
 	flag.BoolVar(&testing, "t", false, "test mode")
+	flag.BoolVar(&downloader.Verbose, "verbose", false, "verbose")
 	flag.StringVar(&ua, "ua", "", "user-agent")
 	flag.Parse()
 }
