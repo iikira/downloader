@@ -6,13 +6,8 @@ import (
 	"github.com/iikira/downloader/cachepool"
 	"io"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
-)
-
-var (
-	writeMu sync.Mutex
 )
 
 // Block 下载区块
@@ -194,16 +189,15 @@ func (der *Downloader) execBlock(id int) (code int, err error) {
 		buf        = cachepool.SetIfNotExist(int32(id), der.Config.CacheSize)
 		n          int
 		n64, begin int64
+		writeErr   error // 写入磁盘发生的错误
 	)
 
 	for {
 		begin = atomic.LoadInt64(&block.Begin) // 用于下文比较
 
-		n, err = resp.Body.Read(buf)
+		n, err = readFullFrom(resp.Body, buf, &der.status.StatusStat.speedsStat, &block.speedsStat)
 
 		n64 = int64(n)
-		der.status.StatusStat.speedsStat.AddReaded(n64)
-		block.speedsStat.AddReaded(n64)
 
 		// 获得剩余的数据量
 		expectedSize := block.expectedContentLength()
@@ -223,12 +217,18 @@ func (der *Downloader) execBlock(id int) (code int, err error) {
 
 		if !der.Config.Testing {
 			// 加锁, 减轻硬盘的压力
-			writeMu.Lock()
+			der.writeMu.Lock()
 
 			// 写入数据
-			der.status.file.WriteAt(buf[:n], begin)
+			_, writeErr = der.status.file.WriteAt(buf[:n], begin)
+			if writeErr != nil {
+				der.cancel()
+				triggerOnError(der.OnCancelError, 1, fmt.Errorf("写入文件错误, %s", writeErr))
+				der.writeMu.Unlock()
+				return 1, writeErr
+			}
 
-			writeMu.Unlock()
+			der.writeMu.Unlock()
 		}
 
 		// 两次 begin 不相等, 可能已有新的空闲线程参与
