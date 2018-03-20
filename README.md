@@ -1,3 +1,9 @@
 # downloader
 多线程下载器
-[![GoDoc](https://godoc.org/github.com/iikira/downloader?status.svg)](https://godoc.org/github.com/iikira/downloader)
+
+move to [iikira/BaiduPCS-Go/downloader](https://github.com/iikira/BaiduPCS-Go/tree/master/downloader)
+
+# Usage
+```
+downloader -p=<parallel> [-test] <download url>...
+```
