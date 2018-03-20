@@ -38,7 +38,10 @@ func (cp *cachePool) Existed(id int32) (existed bool) {
 }
 
 func (cp *cachePool) Get(id int32) []byte {
-	cache, _ := cp.cachepool.Load(id)
+	cache, ok := cp.cachepool.Load(id)
+	if !ok {
+		return nil
+	}
 	return cache.([]byte)
 }
 
@@ -48,14 +51,15 @@ func (cp *cachePool) Set(id int32, size int) []byte {
 	return cp.Get(id)
 }
 
-func (cp *cachePool) SetIfNotExist(id int32, size int) (cache []byte) {
+func (cp *cachePool) SetIfNotExist(id int32, size int) []byte {
 	ok := cp.Existed(id)
-	cache = cp.Get(id)
+	cache := cp.Get(id)
 	if !ok || len(cache) < size {
 		cache = nil
+		cp.Delete(id)
 		cp.Set(id, size)
 	}
-	return
+	return cp.Get(id)
 }
 
 func (cp *cachePool) Delete(id int32) {
