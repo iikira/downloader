@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/iikira/BaiduPCS-Go/downloader"
+	"github.com/iikira/BaiduPCS-Go/pcsverbose"
 	"github.com/iikira/BaiduPCS-Go/requester"
 	"os"
 	"runtime"
@@ -20,7 +21,7 @@ var (
 func init() {
 	flag.IntVar(&parallel, "p", 5, "download max parallel")
 	flag.BoolVar(&testing, "t", false, "test mode")
-	flag.BoolVar(&downloader.Verbose, "verbose", false, "verbose")
+	flag.BoolVar(&pcsverbose.IsVerbose, "verbose", false, "verbose")
 	flag.StringVar(&ua, "ua", "", "user-agent")
 	flag.Parse()
 }
