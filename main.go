@@ -14,13 +14,14 @@ var (
 	parallel  int
 	cacheSize int
 	testing   bool
+	verbose	  bool
 	ua        string
 )
 
 func init() {
 	flag.IntVar(&parallel, "p", 5, "download max parallel")
 	flag.BoolVar(&testing, "t", false, "test mode")
-	flag.BoolVar(&downloader.Verbose, "verbose", false, "verbose")
+	flag.BoolVar(&verbose, "verbose", false, "verbose")
 	flag.StringVar(&ua, "ua", "", "user-agent")
 	flag.Parse()
 }
