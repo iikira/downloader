@@ -4,25 +4,23 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/iikira/BaiduPCS-Go/downloader"
 	"github.com/iikira/BaiduPCS-Go/pcsverbose"
-	"github.com/iikira/BaiduPCS-Go/requester"
+	"github.com/iikira/BaiduPCS-Go/requester/downloader"
 	"os"
+	"path/filepath"
 	"runtime"
 )
 
 var (
-	parallel  int
-	cacheSize int
-	testing   bool
-	ua        string
+	parallel       int
+	cacheSize      int
+	ua             string
+	downloadSuffix = ".downloader_downloading"
 )
 
 func init() {
 	flag.IntVar(&parallel, "p", 5, "download max parallel")
-	flag.BoolVar(&testing, "t", false, "test mode")
 	flag.BoolVar(&pcsverbose.IsVerbose, "verbose", false, "verbose")
-	flag.StringVar(&ua, "ua", "", "user-agent")
 	flag.Parse()
 }
 
@@ -36,13 +34,11 @@ func main() {
 		return
 	}
 
-	client := requester.NewHTTPClient()
-	client.UserAgent = ua
 	for k := range flag.Args() {
-		downloader.DoDownload(flag.Arg(k), downloader.Config{
-			Client:   client,
-			Parallel: parallel,
-			Testing:  testing,
+		downloader.DoDownload(flag.Arg(k), filepath.Base(flag.Arg(k)), &downloader.Config{
+			MaxParallel:       parallel,
+			CacheSize:         30000,
+			InstanceStatePath: filepath.Base(flag.Arg(k)) + downloadSuffix,
 		})
 	}
 	fmt.Println()
