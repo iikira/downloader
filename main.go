@@ -5,22 +5,26 @@ import (
 	"flag"
 	"fmt"
 	"github.com/iikira/BaiduPCS-Go/pcsverbose"
+	"github.com/iikira/BaiduPCS-Go/requester"
 	"github.com/iikira/BaiduPCS-Go/requester/downloader"
 	"os"
-	"path/filepath"
 	"runtime"
 )
 
 var (
 	parallel       int
 	cacheSize      int
-	ua             string
+	test           bool
 	downloadSuffix = ".downloader_downloading"
 )
 
 func init() {
 	flag.IntVar(&parallel, "p", 5, "download max parallel")
+	flag.IntVar(&cacheSize, "c", 30000, "download cache size")
 	flag.BoolVar(&pcsverbose.IsVerbose, "verbose", false, "verbose")
+	flag.BoolVar(&test, "test", false, "test download")
+	flag.StringVar(&requester.UserAgent, "ua", "", "User-Agent")
+
 	flag.Parse()
 }
 
@@ -35,10 +39,22 @@ func main() {
 	}
 
 	for k := range flag.Args() {
-		downloader.DoDownload(flag.Arg(k), filepath.Base(flag.Arg(k)), &downloader.Config{
+		var (
+			savePath string
+			err      error
+		)
+		if !test {
+			savePath, err = downloader.GetFileName(flag.Arg(k), nil)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+		}
+		downloader.DoDownload(flag.Arg(k), savePath, &downloader.Config{
 			MaxParallel:       parallel,
-			CacheSize:         30000,
-			InstanceStatePath: filepath.Base(flag.Arg(k)) + downloadSuffix,
+			CacheSize:         cacheSize,
+			InstanceStatePath: savePath + downloadSuffix,
+			IsTest:            test,
 		})
 	}
 	fmt.Println()
