@@ -78,7 +78,6 @@ func download(id int, downloadURL, savePath string, client *requester.HTTPClient
 
 	download := downloader.NewDownloader(downloadURL, writerAt, &newCfg)
 	download.SetClient(client)
-	download.SetFirstCheckMethod("GET")
 
 	exitChan = make(chan struct{})
 
@@ -178,12 +177,15 @@ func main() {
 				return
 			}
 		}
-		download(k, flag.Arg(k), savePath, nil, downloader.Config{
+		err = download(k, flag.Arg(k), savePath, nil, downloader.Config{
 			MaxParallel:       parallel,
 			CacheSize:         cacheSize,
 			InstanceStatePath: savePath + downloadSuffix,
 			IsTest:            test,
 		})
+		if err != nil {
+			fmt.Printf("err: %s\n", err)
+		}
 	}
 	fmt.Println()
 }
