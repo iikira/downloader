@@ -4,15 +4,18 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"github.com/iikira/BaiduPCS-Go/pcstable"
 	"github.com/iikira/BaiduPCS-Go/pcsutil/converter"
 	"github.com/iikira/BaiduPCS-Go/pcsverbose"
 	"github.com/iikira/BaiduPCS-Go/requester"
 	"github.com/iikira/BaiduPCS-Go/requester/downloader"
+	"github.com/iikira/BaiduPCS-Go/requester/transfer"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
-	"time"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -44,7 +47,6 @@ func download(id int, downloadURL, savePath string, client *requester.HTTPClient
 		file     *os.File
 		writerAt io.WriterAt
 		err      error
-		exitChan chan struct{}
 	)
 
 	if !newCfg.IsTest {
@@ -79,61 +81,46 @@ func download(id int, downloadURL, savePath string, client *requester.HTTPClient
 	download := downloader.NewDownloader(downloadURL, writerAt, &newCfg)
 	download.SetClient(client)
 
-	exitChan = make(chan struct{})
-
-	download.OnExecute(func() {
+	download.OnDownloadStatusEvent(func(status transfer.DownloadStatuser, workersCallback func(downloader.RangeWorkerFunc)) {
 		if isPrintStatus {
-			go func() {
-				for {
-					time.Sleep(1 * time.Second)
-					select {
-					case <-exitChan:
-						return
-					default:
-						download.PrintAllWorkers()
-					}
-				}
-			}()
+			// 输出所有的worker状态
+			var (
+				builder = &strings.Builder{}
+				tb      = pcstable.NewTable(builder)
+			)
+			tb.SetHeader([]string{"#", "status", "range", "left", "speeds", "error"})
+			workersCallback(func(key int, worker *downloader.Worker) bool {
+				wrange := worker.GetRange()
+				tb.Append([]string{fmt.Sprint(worker.ID()), worker.GetStatus().StatusText(), wrange.ShowDetails(), strconv.FormatInt(wrange.Len(), 10), strconv.FormatInt(worker.GetSpeedsPerSecond(), 10), fmt.Sprint(worker.Err())})
+				return true
+			})
+			tb.Render()
+			fmt.Printf("\n\n" + builder.String())
 		}
 
+		var leftStr string
+		left := status.TimeLeft()
+		if left < 0 {
+			leftStr = "-"
+		} else {
+			leftStr = left.String()
+		}
+
+		fmt.Printf("\r[%d] ↓ %s/%s %s/s in %s, left %s ............", id,
+			converter.ConvertFileSize(status.Downloaded(), 2),
+			converter.ConvertFileSize(status.TotalSize(), 2),
+			converter.ConvertFileSize(status.SpeedsPerSecond(), 2),
+			status.TimeElapsed()/1e7*1e7, leftStr,
+		)
+	})
+	download.OnExecute(func() {
 		if newCfg.IsTest {
 			fmt.Printf("[%d] 测试下载开始\n\n", id)
-		}
-
-		var (
-			ds                            = download.GetDownloadStatusChan()
-			format                        = "\r[%d] ↓ %s/%s %s/s in %s, left %s ............"
-			downloaded, totalSize, speeds int64
-			leftStr                       string
-		)
-		for {
-			select {
-			case <-exitChan:
-				return
-			case v, ok := <-ds:
-				if !ok { // channel 已经关闭
-					return
-				}
-
-				downloaded, totalSize, speeds = v.Downloaded(), v.TotalSize(), v.SpeedsPerSecond()
-				if speeds <= 0 {
-					leftStr = "-"
-				} else {
-					leftStr = (time.Duration((totalSize-downloaded)/(speeds)) * time.Second).String()
-				}
-
-				fmt.Printf(format, id,
-					converter.ConvertFileSize(v.Downloaded(), 2),
-					converter.ConvertFileSize(v.TotalSize(), 2),
-					converter.ConvertFileSize(v.SpeedsPerSecond(), 2),
-					v.TimeElapsed()/1e7*1e7, leftStr,
-				)
-			}
 		}
 	})
 
 	err = download.Execute()
-	close(exitChan)
+
 	fmt.Printf("\n")
 	if err != nil {
 		// 下载失败, 删去空文件
