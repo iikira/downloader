@@ -5,7 +5,7 @@ github.com/golang/protobuf/proto
 # github.com/iikira/Baidu-Login v1.2.2-0.20180427090606-ecf146973528
 github.com/iikira/Baidu-Login/bdcrypto
 github.com/iikira/Baidu-Login/bdcrypto/ecb
-# github.com/iikira/BaiduPCS-Go v0.0.0-20191104160258-df2029c9ae0d
+# github.com/iikira/BaiduPCS-Go v0.0.0-20200415142152-979e15e20c1f
 github.com/iikira/BaiduPCS-Go/baidupcs/expires
 github.com/iikira/BaiduPCS-Go/baidupcs/expires/cachemap
 github.com/iikira/BaiduPCS-Go/pcstable

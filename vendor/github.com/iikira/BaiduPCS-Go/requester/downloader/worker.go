@@ -17,10 +17,10 @@ import (
 type (
 	//Worker 工作单元
 	Worker struct {
+		totalSize    int64 // 整个文件的大小, worker请求range时会获取尝试获取该值, 如果不匹配, 则返回错误
 		wrange       *transfer.Range
 		speedsStat   *speeds.Speeds
 		id           int    //id
-		cacheSize    int    //下载缓存
 		url          string //下载地址
 		referer      string //来源地址
 		acceptRanges string
@@ -30,7 +30,6 @@ type (
 		writeMu      *sync.Mutex
 		execMu       sync.Mutex
 
-		paused                 bool
 		pauseChan              chan struct{}
 		workerCancelFunc       context.CancelFunc
 		resetFunc              context.CancelFunc
@@ -85,15 +84,14 @@ func (wer *Worker) lazyInit() {
 	}
 }
 
+// SetTotalSize 设置整个文件的大小, worker请求range时会获取尝试获取该值, 如果不匹配, 则返回错误
+func (wer *Worker) SetTotalSize(size int64) {
+	wer.totalSize = size
+}
+
 //SetClient 设置http客户端
 func (wer *Worker) SetClient(c *requester.HTTPClient) {
 	wer.client = c
-}
-
-//SetCacheSize 设置下载缓存
-func (wer *Worker) SetCacheSize(size int) {
-	wer.cacheSize = size
-	fixCacheSize(&wer.cacheSize)
 }
 
 //SetAcceptRange 设置AcceptRange
@@ -150,16 +148,18 @@ func (wer *Worker) Pause() {
 		return
 	}
 
-	if wer.paused {
+	if wer.status.statusCode == StatusCodePaused {
 		return
 	}
 	wer.pauseChan <- struct{}{}
-	wer.paused = true
+	wer.status.statusCode = StatusCodePaused
 }
 
 //Resume 恢复下载
 func (wer *Worker) Resume() {
-	wer.paused = false
+	if wer.status.statusCode != StatusCodePaused {
+		return
+	}
 	go wer.Execute()
 }
 
@@ -185,7 +185,7 @@ func (wer *Worker) Reset() {
 	if wer.readRespBodyCancelFunc != nil {
 		wer.readRespBodyCancelFunc()
 	}
-	wer.CleanStatus()
+	wer.ClearStatus()
 	go wer.Execute()
 }
 
@@ -214,8 +214,8 @@ func (wer *Worker) Failed() bool {
 	}
 }
 
-//CleanStatus 清空状态
-func (wer *Worker) CleanStatus() {
+//ClearStatus 清空状态
+func (wer *Worker) ClearStatus() {
 	wer.status.statusCode = StatusCodeInit
 }
 
@@ -231,11 +231,11 @@ func (wer *Worker) Execute() {
 	wer.execMu.Lock()
 	defer wer.execMu.Unlock()
 
+	wer.status.statusCode = StatusCodeInit
 	single := wer.acceptRanges == ""
 
 	// 如果已暂停, 退出
-	if wer.paused {
-		wer.status.statusCode = StatusCodePaused
+	if wer.status.statusCode == StatusCodePaused {
 		return
 	}
 
@@ -270,7 +270,7 @@ func (wer *Worker) Execute() {
 	if wer.firstResp != nil {
 		resp = wer.firstResp // 使用第一个连接
 	} else {
-		resp, wer.err = wer.client.Req("GET", wer.url, nil, header)
+		resp, wer.err = wer.client.Req(http.MethodGet, wer.url, nil, header)
 	}
 	if resp != nil {
 		defer func() {
@@ -286,19 +286,7 @@ func (wer *Worker) Execute() {
 		return
 	}
 
-	var (
-		contentLength = resp.ContentLength
-		rangeLength   = wer.wrange.Len()
-	)
-
-	if !single {
-		if contentLength != rangeLength && wer.firstResp == nil { // 跳过检查第一个连接
-			wer.status.statusCode = StatusCodeNetError
-			wer.err = fmt.Errorf("Content-Length is unexpected: %d, need %d", contentLength, rangeLength)
-			return
-		}
-	}
-
+	// 判断响应状态
 	switch resp.StatusCode {
 	case 200, 206:
 		// do nothing, continue
@@ -320,13 +308,36 @@ func (wer *Worker) Execute() {
 		return
 	}
 
-	fixCacheSize(&wer.cacheSize)
+	var (
+		contentLength = resp.ContentLength
+		rangeLength   = wer.wrange.Len()
+	)
+
+	if !single {
+		// 检查请求长度
+		if contentLength != rangeLength && wer.firstResp == nil { // 跳过检查第一个连接
+			wer.status.statusCode = StatusCodeNetError
+			wer.err = fmt.Errorf("Content-Length is unexpected: %d, need %d", contentLength, rangeLength)
+			return
+		}
+		// 检查总大小
+		if wer.totalSize > 0 {
+			total := ParseContentRange(resp.Header.Get("Content-Range"))
+			if total > 0 {
+				if total != wer.totalSize {
+					wer.status.statusCode = StatusCodeInternalError // 这里设置为内部错误, 强制停止下载
+					wer.err = fmt.Errorf("Content-Range total length is unexpected: %d, need %d", total, wer.totalSize)
+					return
+				}
+			}
+		}
+	}
+
 	var (
 		buf       = cachepool.SyncPool.Get().([]byte)
 		n, nn     int
 		n64, nn64 int64
 	)
-
 	defer cachepool.SyncPool.Put(buf)
 
 	for {
@@ -338,7 +349,6 @@ func (wer *Worker) Execute() {
 			wer.status.statusCode = StatusCodeReseted
 			return
 		case <-wer.pauseChan: //暂停
-			wer.status.statusCode = StatusCodePaused
 			return
 		default:
 			wer.status.statusCode = StatusCodeDownloading
@@ -406,7 +416,7 @@ func (wer *Worker) Execute() {
 				wer.status.statusCode = StatusCodeDownloading
 			}
 
-			// 更新数据
+			// 更新下载统计数据
 			wer.wrange.AddBegin(n64)
 			if wer.downloadStatus != nil {
 				wer.downloadStatus.AddDownloaded(n64)

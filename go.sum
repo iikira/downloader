@@ -1,4 +1,5 @@
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/GeertJohan/go.incremental v1.0.0/go.mod h1:6fAjUhbVuX1KcMD3c8TEgVUqmo4seqhv0i0kdATSkM0=
 github.com/GeertJohan/go.rice v0.0.0-20170420135705-c02ca9a983da/go.mod h1:DgrzXonpdQbfN3uYaGz1EG4Sbhyum/MMIn6Cphlh2bw=
 github.com/astaxie/beego v1.10.1/go.mod h1:0R4++1tUqERR0WYFWdfkcrsyoVBCG4DgpDGokT3yb+U=
 github.com/bitly/go-simplejson v0.5.0/go.mod h1:cXHtHw4XUPsvGaxgjIAn8PhEWG9NfngEKAMDJEczWVA=
@@ -17,6 +18,8 @@ github.com/iikira/Baidu-Login v1.2.2-0.20180427090606-ecf146973528 h1:An+h6HX8d2
 github.com/iikira/Baidu-Login v1.2.2-0.20180427090606-ecf146973528/go.mod h1:oMWxZOoEMgQG+0rq8xhEIdxvXwkyG4aN3sZoOQ59R4Q=
 github.com/iikira/BaiduPCS-Go v0.0.0-20191104160258-df2029c9ae0d h1:wK7VikGcyXwo/QCVyCrakeDL7mnpwTKbRICmyDQMLc4=
 github.com/iikira/BaiduPCS-Go v0.0.0-20191104160258-df2029c9ae0d/go.mod h1:+CChzcos2nU+tpolBdvF4djO4a5qjJx8ZLQrZwQbB10=
+github.com/iikira/BaiduPCS-Go v0.0.0-20200415142152-979e15e20c1f h1:qNa0LAhOWR7DklNY/o8CcjKf985MFdFnjAa8cfk4/bw=
+github.com/iikira/BaiduPCS-Go v0.0.0-20200415142152-979e15e20c1f/go.mod h1:2/PajHip76coQCOg+eb+4vCgO7KxLWpFSrKblMqmhCs=
 github.com/iikira/BaiduPCS-Go v3.5.6+incompatible h1:oKsLtn0zPCsuQZs8AXuLTdd3PVyFnzjqcFnv7jGb8v8=
 github.com/iikira/BaiduPCS-Go v3.5.6+incompatible/go.mod h1:/Dv6EqOSD+ihyltwf0i//5shl8feBdebd92bqB9faYM=
 github.com/iikira/baidu-tools v0.0.0-20190609113215-4dd64618064d/go.mod h1:UHD1R9RGXz5nDsKm3KbdD3yxCJZ18nmR+1ZAc5GkrNw=
