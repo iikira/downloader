@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/iikira/BaiduPCS-Go/pcstable"
-	"github.com/iikira/BaiduPCS-Go/pcsutil/converter"
-	"github.com/iikira/BaiduPCS-Go/pcsverbose"
-	"github.com/iikira/BaiduPCS-Go/requester"
-	"github.com/iikira/BaiduPCS-Go/requester/downloader"
-	"github.com/iikira/BaiduPCS-Go/requester/transfer"
+	"github.com/iikira/iikira-go-utils/pcsverbose"
+	"github.com/iikira/iikira-go-utils/requester"
+	"github.com/iikira/iikira-go-utils/requester/downloader"
+	"github.com/iikira/iikira-go-utils/requester/transfer"
+	"github.com/iikira/iikira-go-utils/utils/converter"
+	"github.com/olekukonko/tablewriter"
 	"io"
 	"os"
 	"path/filepath"
@@ -86,8 +86,12 @@ func download(id int, downloadURL, savePath string, client *requester.HTTPClient
 			// 输出所有的worker状态
 			var (
 				builder = &strings.Builder{}
-				tb      = pcstable.NewTable(builder)
+				tb      = tablewriter.NewWriter(builder)
 			)
+			tb.SetAutoWrapText(false)
+			tb.SetBorder(false)
+			tb.SetHeaderLine(false)
+			tb.SetColumnSeparator("")
 			tb.SetHeader([]string{"#", "status", "range", "left", "speeds", "error"})
 			workersCallback(func(key int, worker *downloader.Worker) bool {
 				wrange := worker.GetRange()

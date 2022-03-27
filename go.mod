@@ -2,4 +2,7 @@ module github.com/iikira/downloader
 
 go 1.13
 
-require github.com/iikira/BaiduPCS-Go v0.0.0-20200415142152-979e15e20c1f
+require (
+	github.com/iikira/iikira-go-utils v0.0.0-20220222150209-a6338eee669f
+	github.com/olekukonko/tablewriter v0.0.5
+)
