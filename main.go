@@ -4,18 +4,19 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/iikira/iikira-go-utils/pcsverbose"
-	"github.com/iikira/iikira-go-utils/requester"
-	"github.com/iikira/iikira-go-utils/requester/downloader"
-	"github.com/iikira/iikira-go-utils/requester/transfer"
-	"github.com/iikira/iikira-go-utils/utils/converter"
-	"github.com/olekukonko/tablewriter"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/iikira/iikira-go-utils/pcsverbose"
+	"github.com/iikira/iikira-go-utils/requester"
+	"github.com/iikira/iikira-go-utils/requester/downloader"
+	"github.com/iikira/iikira-go-utils/requester/transfer"
+	"github.com/iikira/iikira-go-utils/utils/converter"
+	"github.com/olekukonko/tablewriter"
 )
 
 const (
@@ -29,6 +30,8 @@ var (
 	test           bool
 	isPrintStatus  bool
 	downloadSuffix = ".downloader_downloading"
+	Version        = "1.0.0-dev"
+	showVersion    = false
 )
 
 func init() {
@@ -38,6 +41,7 @@ func init() {
 	flag.BoolVar(&test, "test", false, "test download")
 	flag.BoolVar(&isPrintStatus, "status", false, "print status")
 	flag.StringVar(&requester.UserAgent, "ua", "", "User-Agent")
+	flag.BoolVar(&showVersion, "version", false, "print version")
 
 	flag.Parse()
 }
@@ -147,6 +151,10 @@ func download(id int, downloadURL, savePath string, client *requester.HTTPClient
 }
 
 func main() {
+	if showVersion {
+		fmt.Println(Version)
+		return
+	}
 	if flag.NArg() == 0 {
 		flag.Usage()
 		if runtime.GOOS == "windows" {

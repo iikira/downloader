@@ -1,0 +1,337 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version name"
+        required: true
+        type: string
+        default: "1.0.1"
+      binary_name:
+        description: "Binary name"
+        required: true
+        type: string
+        default: "downloader"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: ^1.24.5
+  CHECKOUT_ACTION: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871
+
+jobs:
+  calculate_version:
+    name: Calculate version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.outputs.outputs.version }}
+    steps:
+      - name: Set outputs
+        id: outputs
+        run: |-
+          version="${{ inputs.version }}-$(date +%Y%m%d%H%M%S)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build binary
+    continue-on-error: true
+    if: github.event_name != 'workflow_dispatch' || inputs.build == 'All' || inputs.build == 'Binary'
+    runs-on: ${{ matrix.run-on }}
+    needs:
+      - calculate_version
+    strategy:
+      matrix:
+        include:
+          - { os: linux, arch: amd64, debian: amd64, rpm: x86_64, pacman: x86_64, openwrt: "x86_64", run-on: ubuntu-latest }
+          - { os: linux, arch: "386", go386: sse2, debian: i386, rpm: i386, openwrt: "i386_pentium4", run-on: ubuntu-latest }
+          - { os: linux, arch: "386", go386: softfloat, openwrt: "i386_pentium-mmx", run-on: ubuntu-latest }
+          - { os: linux, arch: arm64, debian: arm64, rpm: aarch64, pacman: aarch64, openwrt: "aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic", run-on: ubuntu-latest }
+          - { os: linux, arch: arm, goarm: "5", openwrt: "arm_arm926ej-s arm_cortex-a7 arm_cortex-a9 arm_fa526 arm_xscale", run-on: ubuntu-latest }
+          - { os: linux, arch: arm, goarm: "6", debian: armel, rpm: armv6hl, openwrt: "arm_arm1176jzf-s_vfp", run-on: ubuntu-latest }
+          - { os: linux, arch: arm, goarm: "7", debian: armhf, rpm: armv7hl, pacman: armv7hl, openwrt: "arm_cortex-a5_vfpv4 arm_cortex-a7_neon-vfpv4 arm_cortex-a7_vfpv4 arm_cortex-a8_vfpv3 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 arm_cortex-a15_neon-vfpv4", run-on: ubuntu-latest }
+          - { os: linux, arch: mips, gomips: softfloat, openwrt: "mips_24kc mips_4kec mips_mips32", run-on: ubuntu-latest }
+          - { os: linux, arch: mipsle, gomips: hardfloat, debian: mipsel, rpm: mipsel, openwrt: "mipsel_24kc_24kf", run-on: ubuntu-latest }
+          - { os: linux, arch: mipsle, gomips: softfloat, openwrt: "mipsel_24kc mipsel_74kc mipsel_mips32", run-on: ubuntu-latest }
+          - { os: linux, arch: mips64, gomips: softfloat, openwrt: "mips64_mips64r2 mips64_octeonplus", run-on: ubuntu-latest }
+          - { os: linux, arch: mips64le, gomips: hardfloat, debian: mips64el, rpm: mips64el, run-on: ubuntu-latest }
+          - { os: linux, arch: mips64le, gomips: softfloat, openwrt: "mips64el_mips64r2", run-on: ubuntu-latest }
+          - { os: linux, arch: s390x, debian: s390x, rpm: s390x, run-on: ubuntu-latest }
+          - { os: linux, arch: ppc64le, debian: ppc64el, rpm: ppc64le, run-on: ubuntu-latest }
+          - { os: linux, arch: riscv64, debian: riscv64, rpm: riscv64, openwrt: "riscv64_generic", run-on: ubuntu-latest }
+          - { os: linux, arch: loong64, debian: loongarch64, rpm: loongarch64, openwrt: "loongarch64_generic", run-on: ubuntu-latest }
+          - { os: windows, arch: amd64, run-on: ubuntu-latest }
+          - { os: windows, arch: amd64, legacy_go: true, run-on: ubuntu-latest }
+          # MinGW arm64 有问题: st_blksize redeclared other declaration of st_blksize
+          # - { os: windows, arch: arm64, run-on: ubuntu-24.04-arm }
+          - { os: darwin, arch: amd64, run-on: macos-latest }
+          - { os: darwin, arch: arm64, run-on: macos-latest }
+          - { os: android, arch: arm64, ndk: "aarch64-linux-android21", run-on: ubuntu-latest }
+          - { os: android, arch: arm, ndk: "armv7a-linux-androideabi21", run-on: ubuntu-latest }
+          - { os: android, arch: amd64, ndk: "x86_64-linux-android21", run-on: ubuntu-latest }
+          - { os: android, arch: "386", ndk: "i686-linux-android21", run-on: ubuntu-latest }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        if: ${{ ! matrix.legacy_go }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.24.5
+          cache: false
+      - name: Cache Legacy Go
+        if: matrix.require_legacy_go
+        id: cache-legacy-go
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/go_legacy
+          key: go_legacy_1236
+      - name: Setup Legacy Go
+        if: matrix.legacy_go && steps.cache-legacy-go.outputs.cache-hit != 'true'
+        run: |-
+          chmod +x .github/setup_legacy_go.sh
+          .github/setup_legacy_go.sh
+      - name: Setup Legacy Go 2
+        if: matrix.legacy_go
+        run: |-
+          echo "PATH=$HOME/go/go_legacy/bin:$PATH" >> $GITHUB_ENV
+          echo "GOROOT=$HOME/go/go_legacy" >> $GITHUB_ENV
+      - name: Setup Android NDK
+        if: matrix.os == 'android'
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r28
+      - name: Setup MinGW x86_64
+        if: matrix.os == 'windows' && matrix.arch == 'amd64'
+        run: |
+          set -xeuo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+      - name: Setup MinGW arm64
+        if: matrix.os == 'windows' && matrix.arch == 'arm64'
+        run: |
+          set -xeuo pipefail
+          mkdir -p mingw-woarm64
+          cd mingw-woarm64
+          curl -OL https://github.com/Windows-on-ARM-Experiments/mingw-woarm64-build/releases/download/2025-07-15/aarch64-w64-mingw32-msvcrt-toolchain.tar.gz
+          tar zxf aarch64-w64-mingw32-msvcrt-toolchain.tar.gz
+          cd ..
+      - name: Setup common build args
+        id: common_build_args
+        run: |
+          set -xeuo pipefail
+          LDFLAGS="-s -w -buildid= -checklinkname=0 -X main.Version=${{ needs.calculate_version.outputs.version }}"
+          OTHER_ARGS="-v -trimpath -o dist/${{ inputs.binary_name }}"
+          CGO_ENABLED=0
+          CC=""
+          case '${{ matrix.os }}' in
+          windows)
+            OTHER_ARGS="${OTHER_ARGS} -buildmode=exe -tags cmount"
+            case '${{ matrix.arch }}' in
+              amd64)
+                CC=x86_64-w64-mingw32-gcc
+              ;;
+              386)
+                CC=i686-w64-mingw32-gcc
+              ;;
+              arm64)
+                CC=$(realpath ./mingw-woarm64/bin/aarch64-w64-mingw32-gcc)
+              ;;
+            esac
+            CGO_ENABLED=1
+          ;;
+          android)
+            CGO_ENABLED=1
+            CC='${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{ matrix.ndk }}-clang'
+            LDFLAGS="${LDFLAGS} -linkmode=external -extldflags=-pie"
+          ;;
+          darwin)
+            CGO_ENABLED=1
+            OTHER_ARGS="${OTHER_ARGS} -tags cmount"
+          ;;
+          esac
+
+          echo "LDFLAGS=${LDFLAGS}" >> $GITHUB_OUTPUT
+          echo "OTHER_ARGS=${OTHER_ARGS}" >> $GITHUB_OUTPUT
+          if [ "$CC" != "" ]; then
+            version=`$CC --version`
+            echo "CC=$CC, version: ${version}"
+            echo "CC=$CC" >> $GITHUB_ENV
+          fi
+          echo "CGO_ENABLED=$CGO_ENABLED" >> $GITHUB_ENV
+      - name: Build
+        run: |
+          set -xeuo pipefail
+          mkdir -p dist
+          go build ${{ steps.common_build_args.outputs.OTHER_ARGS }} -ldflags '${{ steps.common_build_args.outputs.LDFLAGS }}' ./cmd/downloader
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          GO386: ${{ matrix.go386 }}
+          GOARM: ${{ matrix.goarm }}
+          GOMIPS: ${{ matrix.gomips }}
+          GOMIPS64: ${{ matrix.gomips }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set name
+        run: |-
+          DIR_NAME="${{ inputs.binary_name }}-${{ needs.calculate_version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}"
+          if [[ -n "${{ matrix.goarm }}" ]]; then
+            DIR_NAME="${DIR_NAME}v${{ matrix.goarm }}"
+          elif [[ -n "${{ matrix.go386 }}" && "${{ matrix.go386 }}" != 'sse2' ]]; then
+            DIR_NAME="${DIR_NAME}-${{ matrix.go386 }}"
+          elif [[ -n "${{ matrix.gomips }}" && "${{ matrix.gomips }}" != 'hardfloat' ]]; then
+            DIR_NAME="${DIR_NAME}-${{ matrix.gomips }}"
+          elif [[ "${{ matrix.legacy_go }}" == 'true' ]]; then
+            DIR_NAME="${DIR_NAME}-legacy"
+          fi
+          echo "DIR_NAME=${DIR_NAME}" >> "${GITHUB_ENV}"
+          PKG_VERSION="${{ needs.calculate_version.outputs.version }}"
+          PKG_VERSION="${PKG_VERSION//-/\~}"
+          echo "PKG_VERSION=${PKG_VERSION}" >> "${GITHUB_ENV}"
+      - name: Package DEB
+        if: matrix.debian != ''
+        run: |
+          set -xeuo pipefail
+          sudo gem install fpm
+          sudo apt-get update
+          sudo apt-get install -y debsigs
+          cp .fpm_systemd .fpm
+          fpm -t deb \
+            -v "$PKG_VERSION" \
+            -p "dist/${{ inputs.binary_name }}_${{ needs.calculate_version.outputs.version }}_${{ matrix.os }}_${{ matrix.debian }}.deb" \
+            --architecture ${{ matrix.debian }} \
+            dist/${{ inputs.binary_name }}=/usr/bin/${{ inputs.binary_name }}
+          curl -Lo '/tmp/debsigs.diff' 'https://gitlab.com/debsigs/debsigs/-/commit/160138f5de1ec110376d3c807b60a37388bc7c90.diff'
+          sudo patch /usr/bin/debsigs < '/tmp/debsigs.diff'
+          rm -rf $HOME/.gnupg
+          gpg --pinentry-mode loopback --passphrase "${{ secrets.GPG_PASSPHRASE }}" --import <<EOF
+          ${{ secrets.GPG_KEY }}
+          EOF
+          debsigs --sign=origin -k ${{ secrets.GPG_KEY_ID }} --gpgopts '--pinentry-mode loopback --passphrase "${{ secrets.GPG_PASSPHRASE }}"' dist/*.deb
+      - name: Package RPM
+        if: matrix.rpm != ''
+        run: |-
+          set -xeuo pipefail
+          sudo gem install fpm
+          cp .fpm_systemd .fpm
+          fpm -t rpm \
+            -v "$PKG_VERSION" \
+            -p "dist/${{ inputs.binary_name }}_${{ needs.calculate_version.outputs.version }}_${{ matrix.os }}_${{ matrix.rpm }}.rpm" \
+            --architecture ${{ matrix.rpm }} \
+            dist/${{ inputs.binary_name }}=/usr/bin/${{ inputs.binary_name }}
+          cat > $HOME/.rpmmacros <<EOF
+          %_gpg_name ${{ secrets.GPG_KEY_ID }}
+          %_gpg_sign_cmd_extra_args --pinentry-mode loopback --passphrase ${{ secrets.GPG_PASSPHRASE }}
+          EOF
+          gpg --pinentry-mode loopback --passphrase "${{ secrets.GPG_PASSPHRASE }}" --import <<EOF
+          ${{ secrets.GPG_KEY }}
+          EOF
+          rpmsign --addsign dist/*.rpm
+      - name: Package Pacman
+        if: matrix.pacman != ''
+        run: |-
+          set -xeuo pipefail
+          sudo gem install fpm
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools
+          cp .fpm_systemd .fpm
+          fpm -t pacman \
+            -v "$PKG_VERSION" \
+            -p "dist/${{ inputs.binary_name }}_${{ needs.calculate_version.outputs.version }}_${{ matrix.os }}_${{ matrix.pacman }}.pkg.tar.zst" \
+            --architecture ${{ matrix.pacman }} \
+            dist/${{ inputs.binary_name }}=/usr/bin/${{ inputs.binary_name }}
+      - name: Package OpenWrt
+        if: matrix.openwrt != ''
+        run: |-
+          set -xeuo pipefail
+          sudo gem install fpm
+          cp .fpm_openwrt .fpm
+          fpm -t deb \
+            -v "$PKG_VERSION" \
+            -p "dist/openwrt.deb" \
+            --architecture all \
+            dist/${{ inputs.binary_name }}=/usr/bin/${{ inputs.binary_name }}
+          chmod +x .github/deb2ipk.sh
+          for architecture in ${{ matrix.openwrt }}; do
+            .github/deb2ipk.sh "$architecture" "dist/openwrt.deb" "dist/${{ inputs.binary_name }}_${{ needs.calculate_version.outputs.version }}_openwrt_${architecture}.ipk"
+          done
+          rm "dist/openwrt.deb"
+      - name: Archive
+        run: |
+          set -xeuo pipefail
+          cd dist
+          mkdir -p "${DIR_NAME}"
+          cp ../LICENSE "${DIR_NAME}"
+          if [ '${{ matrix.os }}' = 'windows' ]; then
+            cp ${{ inputs.binary_name }} "${DIR_NAME}/${{ inputs.binary_name }}.exe"
+            zip -r "${DIR_NAME}.zip" "${DIR_NAME}"
+          else
+            cp ${{ inputs.binary_name }} "${DIR_NAME}"
+            tar -czvf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
+          fi
+          rm -r "${DIR_NAME}"
+      - name: Cleanup
+        run: rm dist/${{ inputs.binary_name }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}_${{ matrix.arch }}${{ matrix.goarm && format('v{0}', matrix.goarm) }}${{ matrix.go386 && format('_{0}', matrix.go386) }}${{ matrix.gomips && format('_{0}', matrix.gomips) }}${{ matrix.legacy_go && '-legacy' || '' }}
+          path: "dist"
+
+  upload:
+    name: Upload builds
+    if: "!failure() && github.event_name == 'workflow_dispatch'"
+    runs-on: ubuntu-latest
+    needs:
+      - calculate_version
+      - build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
+        with:
+          fetch-depth: 0
+      - name: Cache ghr
+        uses: actions/cache@v4
+        id: cache-ghr
+        with:
+          path: |
+            ~/go/bin/ghr
+          key: ghr
+      - name: Setup ghr
+        if: steps.cache-ghr.outputs.cache-hit != 'true'
+        run: |-
+          cd $HOME
+          git clone https://github.com/nekohasekai/ghr ghr
+          cd ghr
+          go install -v .
+      - name: Set tag
+        run: |-
+          git ls-remote --exit-code --tags origin v${{ needs.calculate_version.outputs.version }} || echo "PUBLISHED=false" >> "$GITHUB_ENV"
+          git tag v${{ needs.calculate_version.outputs.version }} -f
+          echo "VERSION=${{ needs.calculate_version.outputs.version }}" >> "$GITHUB_ENV"
+      - name: Download builds
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Upload builds
+        if: ${{ env.PUBLISHED == 'false' }}
+        run: |-
+          export PATH="$PATH:$HOME/go/bin"
+          ghr --replace --draft --prerelease -p 5 "v${VERSION}" dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Replace builds
+        if: ${{ env.PUBLISHED != 'false' }}
+        run: |-
+          export PATH="$PATH:$HOME/go/bin"
+          ghr --replace -p 5 "v${VERSION}" dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

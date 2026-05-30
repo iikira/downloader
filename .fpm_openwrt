@@ -1,0 +1,8 @@
+-s dir
+--name downloader
+--category net
+--description "downloader"
+--maintainer "iikira <i@mail.iikira.com>"
+--no-deb-generate-changes
+
+LICENSE=/usr/share/licenses/downloader/LICENSE
