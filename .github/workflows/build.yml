@@ -38,7 +38,7 @@ jobs:
   build:
     name: Build binary
     continue-on-error: true
-    if: github.event_name != 'workflow_dispatch' || inputs.build == 'All' || inputs.build == 'Binary'
+    if: true
     runs-on: ${{ matrix.run-on }}
     needs:
       - calculate_version
