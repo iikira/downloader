@@ -132,7 +132,7 @@ jobs:
           CC=""
           case '${{ matrix.os }}' in
           windows)
-            OTHER_ARGS="${OTHER_ARGS} -buildmode=exe -tags cmount"
+            OTHER_ARGS="${OTHER_ARGS} -buildmode=exe"
             case '${{ matrix.arch }}' in
               amd64)
                 CC=x86_64-w64-mingw32-gcc
@@ -153,7 +153,7 @@ jobs:
           ;;
           darwin)
             CGO_ENABLED=1
-            OTHER_ARGS="${OTHER_ARGS} -tags cmount"
+            OTHER_ARGS="${OTHER_ARGS}"
           ;;
           esac
 
