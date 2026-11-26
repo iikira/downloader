@@ -5,7 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"mime"
+	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -44,6 +48,55 @@ func init() {
 	flag.BoolVar(&showVersion, "version", false, "print version")
 
 	flag.Parse()
+}
+
+// getFileNameAndSize 通过 GET 请求获取文件名和远端文件大小
+// 与 GetFileName 不同, 使用 GET 而非 HEAD, 并同时返回 Content-Length
+func getFileNameAndSize(uri string) (filename string, remoteSize int64, err error) {
+	resp, err := requester.NewHTTPClient().Req(http.MethodGet, uri, nil, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close() // 不读Body, 马上关闭连接
+
+	if resp.StatusCode >= 400 {
+		return "", 0, fmt.Errorf("获取文件信息失败: %s", resp.Status)
+	}
+
+	remoteSize = resp.ContentLength
+
+	filename = path.Base(uri)
+	if _, params, parseErr := mime.ParseMediaType(resp.Header.Get("Content-Disposition")); parseErr == nil {
+		if name, ueErr := url.QueryUnescape(params["filename"]); ueErr == nil && name != "" {
+			filename = name
+		}
+	}
+	return filename, remoteSize, nil
+}
+
+// diagnoseFile 仅诊断: 对比远端文件大小与本地已存在文件, 不影响下载行为
+func diagnoseFile(id int, savePath string, remoteSize int64) {
+	// 本地文件大小受 WriteAt 按偏移写入影响, 未完成的下载也可能已达到远端大小, 大小一致不代表下载完整
+	if _, err := os.Stat(savePath + downloadSuffix); err == nil {
+		fmt.Printf("[%d] 诊断: 存在断点续传信息文件: %s, 将尝试续传\n", id, savePath+downloadSuffix)
+	}
+
+	if remoteSize < 0 {
+		fmt.Printf("[%d] 诊断: 远端未返回 Content-Length, 无法对比文件大小\n", id)
+		return
+	}
+
+	info, err := os.Stat(savePath)
+	if err != nil {
+		fmt.Printf("[%d] 诊断: 本地文件不存在: %s (远端大小 %d)\n", id, savePath, remoteSize)
+		return
+	}
+
+	verdict := "大小不一致"
+	if !info.IsDir() && info.Size() == remoteSize {
+		verdict = "大小一致"
+	}
+	fmt.Printf("[%d] 诊断: 本地大小 %d / 远端大小 %d, %s: %s\n", id, info.Size(), remoteSize, verdict, savePath)
 }
 
 func download(id int, downloadURL, savePath string, client *requester.HTTPClient, newCfg downloader.Config) error {
@@ -166,15 +219,17 @@ func main() {
 
 	for k := range flag.Args() {
 		var (
-			savePath string
-			err      error
+			savePath   string
+			remoteSize int64
+			err        error
 		)
 		if !test {
-			savePath, err = downloader.GetFileName(flag.Arg(k), nil)
+			savePath, remoteSize, err = getFileNameAndSize(flag.Arg(k))
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
+			diagnoseFile(k, savePath, remoteSize)
 		}
 		err = download(k, flag.Arg(k), savePath, nil, downloader.Config{
 			MaxParallel:       parallel,
